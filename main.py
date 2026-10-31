@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Optional
@@ -401,6 +401,15 @@ async def extract_nid_info(
         logger.error(f"Unexpected error in extract_nid_info: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+PREVIEW_LANDING_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")
+
+
+def preview_landing_page() -> str:
+    """Load the sandbox-only landing page (embeds the Swagger UI)."""
+    with open(PREVIEW_LANDING_PATH, encoding="utf-8") as html_file:
+        return html_file.read()
+
+
 @app.get("/", 
          response_model=RootResponse,
          summary="API Information",
@@ -433,6 +442,11 @@ async def extract_nid_info(
          tags=["API Information"])
 async def root():
     """Root endpoint with API information."""
+    # Base44 sandbox only: the preview panel needs an HTML document at "/",
+    # so serve a small landing page that embeds the Swagger UI. Unset (or any
+    # other value) keeps the documented JSON response.
+    if os.environ.get("BASE44_PREVIEW_MODE") == "1":
+        return HTMLResponse(preview_landing_page())
     return {
         "message": "NID Parser API",
         "version": "1.0.0",

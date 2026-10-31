@@ -1,0 +1,40 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.base44
+    ports:
+      - "3000:8000"
+    volumes:
+      - .:/app
+      # EasyOCR downloads its detection/recognition models here on startup;
+      # keep them out of the bind mount so the repo stays clean.
+      - easyocr-models:/app/models
+    environment:
+      - BASE44_PREVIEW_MODE
+      - PYTHONUNBUFFERED=1
+    command:
+      - python
+      - -m
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+    healthcheck:
+      # The startup hook downloads the OCR models before uvicorn serves requests.
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    restart: on-failure
+
+volumes:
+  easyocr-models:

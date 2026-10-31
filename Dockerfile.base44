@@ -1,0 +1,34 @@
+# Development image for the NID Parser API (Base44 sandbox).
+# Source is bind-mounted at runtime by docker-compose.base44.yml; only the
+# dependency manifest is copied here so rebuilds are fast.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Runtime libraries: poppler for pdf2image, libgl/libglib for opencv,
+# libgomp for torch's OpenMP runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        poppler-utils \
+        libgl1 \
+        libglib2.0-0 \
+        libgomp1 \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt ./
+
+# CPU-only torch wheels keep the image ~2GB smaller than the default PyPI
+# build (which pulls CUDA libraries) and this service runs with gpu=False.
+RUN pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 \
+        --index-url https://download.pytorch.org/whl/cpu
+
+# numpy is pinned to 1.24.3 in requirements.txt, so hold scipy/scikit-image
+# to releases that still build against that numpy.
+RUN printf 'scipy<1.12\nscikit-image<0.22\n' > /tmp/base44-constraints.txt \
+    && pip install -r requirements.txt -c /tmp/base44-constraints.txt
+
+EXPOSE 8000
